@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Voice Controller</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.js"></script>
+</head>
+<body style="text-align: center; font-family: Arial;">
+    <h1>AI Voice Assistant</h1>
+    <button id="start-btn" style="padding: 20px; font-size: 20px;">Nhấn để nói tiếng Việt</button>
+    <p id="result" style="margin-top: 20px; color: blue;"></p>
+
+    <script>
+        // Cấu hình MQTT
+        const client = new Paho.MQTT.Client("broker.hivemq.com", Number(8000), "clientId-" + Math.random());
+        client.connect({onSuccess: () => console.log("Connected to MQTT")});
+
+        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        recognition.lang = 'vi-VN'; // NHẬN DIỆN TIẾNG VIỆT
+
+        document.getElementById('start-btn').onclick = () => recognition.start();
+
+        recognition.onresult = (event) => {
+            const text = event.results[0][0].transcript;
+            document.getElementById('result').innerText = "Bạn đã nói: " + text;
+            
+            // Gửi tin nhắn lên MQTT topic "hoan/voice_cmd"
+            const message = new Paho.MQTT.Message(text);
+            message.destinationName = "hoan/voice_cmd";
+            client.send(message);
+        };
+    </script>
+</body>
+</html>
