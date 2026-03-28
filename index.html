@@ -1,65 +1,77 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>AI Voice Controller Debug</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Voice AI</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.js"></script>
+    <style>
+        body { text-align: center; font-family: sans-serif; padding: 20px; }
+        #log { background: #eee; text-align: left; padding: 10px; height: 200px; overflow-y: auto; font-size: 12px; margin-top: 20px; border: 1px solid #ccc; }
+        button { padding: 15px 30px; font-size: 18px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 5px; }
+    </style>
 </head>
-<body style="text-align: center; font-family: Arial; padding-top: 50px;">
-    <h1>AI Voice Assistant</h1>
-    <button id="start-btn" style="padding: 20px; font-size: 20px;">Nhấn để nói tiếng Việt</button>
-    <p id="status" style="color: gray;">Trạng thái: Đang chờ...</p>
-    <p id="result" style="margin-top: 20px; font-weight: bold; color: blue;"></p>
+<body>
+    <h2>Kiểm tra Robot AI</h2>
+    <button id="btn">BẮT ĐẦU NÓI</button>
+    
+    <div id="log">--- Nhật ký hệ thống ---<br></div>
 
     <script>
-        const status = document.getElementById('status');
-        const result = document.getElementById('result');
-        const btn = document.getElementById('start-btn');
+        const logArea = document.getElementById('log');
+        function writeLog(msg) {
+            logArea.innerHTML += "> " + msg + "<br>";
+            logArea.scrollTop = logArea.scrollHeight;
+        }
 
-        // 1. Kiểm tra trình duyệt có hỗ trợ không
+        // 1. Kiểm tra hỗ trợ trình duyệt
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
-            alert("Rất tiếc, trình duyệt này không hỗ trợ nhận diện giọng nói. Hãy dùng Chrome hoặc Edge!");
+            writeLog("LỖI: Trình duyệt không hỗ trợ Speech API!");
+        } else {
+            writeLog("OK: Trình duyệt có hỗ trợ Speech API.");
         }
 
         const recognition = new SpeechRecognition();
         recognition.lang = 'vi-VN';
-        recognition.continuous = false;
-        recognition.interimResults = false;
 
-        // 2. Cấu hình MQTT
+        // 2. Cấu hình MQTT (Tạm thời bỏ qua nếu lỗi để test Mic trước)
+        writeLog("Đang thử kết nối MQTT...");
         const client = new Paho.MQTT.Client("broker.hivemq.com", Number(8000), "clientId-" + Math.random());
-        client.connect({onSuccess: () => {
-            console.log("Connected to MQTT");
-            status.innerText = "Trạng thái: Đã kết nối MQTT!";
-        }});
+        
+        client.connect({
+            onSuccess: () => writeLog("MQTT: Đã kết nối thành công!"),
+            onFailure: (err) => writeLog("MQTT LỖI: " + err.errorMessage)
+        });
 
-        btn.onclick = () => {
+        // 3. Sự kiện bấm nút
+        document.getElementById('btn').addEventListener('click', function() {
+            writeLog("Đã bấm nút. Đang yêu cầu mở Mic...");
             try {
                 recognition.start();
-                status.innerText = "Trạng thái: Đang lắng nghe...";
             } catch (e) {
-                alert("Lỗi khi khởi động Mic: " + e.message);
+                writeLog("LỖI KHI START: " + e.message);
+            }
+        });
+
+        recognition.onstart = () => writeLog("HỆ THỐNG: Đang nghe... Hãy nói đi!");
+        
+        recognition.onresult = (event) => {
+            const text = event.results[0][0].transcript;
+            writeLog("BẠN NÓI: " + text);
+            
+            // Gửi qua MQTT
+            try {
+                const message = new Paho.MQTT.Message(text);
+                message.destinationName = "hoan/voice_cmd";
+                client.send(message);
+                writeLog("Đã gửi lệnh lên mây!");
+            } catch (e) {
+                writeLog("Lỗi gửi MQTT: " + e.message);
             }
         };
 
-        recognition.onresult = (event) => {
-            const text = event.results[0][0].transcript;
-            result.innerText = "Bạn đã nói: " + text;
-            status.innerText = "Trạng thái: Đã nhận diện xong!";
-            
-            const message = new Paho.MQTT.Message(text);
-            message.destinationName = "hoan/voice_cmd";
-            client.send(message);
-        };
-
-        recognition.onerror = (event) => {
-            status.innerText = "Trạng thái: Lỗi rồi!";
-            alert("Lỗi Recognition: " + event.error);
-        };
-
-        recognition.onnomatch = () => {
-            status.innerText = "Trạng thái: Không nghe rõ...";
-        };
+        recognition.onerror = (event) => writeLog("LỖI MIC: " + event.error);
+        recognition.onend = () => writeLog("HỆ THỐNG: Đã dừng nghe.");
     </script>
 </body>
 </html>
