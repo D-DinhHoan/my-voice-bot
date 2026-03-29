@@ -120,17 +120,17 @@
                 if (question.length === 0) question = "Bạn có thể giúp gì cho tôi?";
                 askGemini(question);
             } 
-            // NÂNG CẤP 2: NẾU KHÔNG CÓ "GOOGLE", KIỂM TRA LỆNH ĐIỀU KHIỂN
-            else if (transcript.includes("đèn") || transcript.includes("động cơ") || transcript.includes("bơm") || transcript.includes("cả 3") || transcript.includes("tất cả") || transcript.includes("cả ba")) {
-                document.getElementById("ai-response").innerHTML = "Đang thực thi lệnh phần cứng ⚙️";
+            // NÂNG CẤP 2: LỆNH PHẦN CỨNG + LỆNH PHÁT NHẠC
+            else if (transcript.includes("đèn") || transcript.includes("động cơ") || transcript.includes("bơm") || transcript.includes("cả 3") || transcript.includes("tất cả") || transcript.includes("cả ba") || transcript.includes("nhạc")) {
+                document.getElementById("ai-response").innerHTML = "Đang thực thi lệnh hệ thống ⚙️🎵";
                 document.getElementById("ai-response").style.color = "green";
-                publishMessage(topic_cmd, transcript);
+                publishMessage(topic_cmd, transcript); // Gửi nguyên câu nói xuống ESP32
             } 
-            // NÂNG CẤP 3: KHÔNG CÓ "GOOGLE" VÀ CŨNG KHÔNG PHẢI LỆNH -> BÁO LỖI
+            // NÂNG CẤP 3: KHÔNG PHẢI AI, CŨNG KHÔNG PHẢI LỆNH -> BÁO LỖI
             else {
                 document.getElementById("ai-response").innerHTML = "Không rõ yêu cầu ❌";
                 document.getElementById("ai-response").style.color = "red";
-                publishMessage(topic_cmd, "khong_ro_yeu_cau"); // Gửi mã lỗi xuống mạch
+                publishMessage(topic_cmd, "khong_ro_yeu_cau"); 
             }
         };
 
