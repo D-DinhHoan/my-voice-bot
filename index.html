@@ -74,7 +74,11 @@
                 let response = await fetch(url, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                    body: JSON.stringify({ 
+                        contents: [{ parts: [{ text: prompt }] }],
+                        // BÙA YÊU LÀ ĐÂY: Cấp quyền cho AI tự động dùng Google Search
+                        tools: [{ googleSearch: {} }] 
+                    })
                 });
                 
                 let json = await response.json();
