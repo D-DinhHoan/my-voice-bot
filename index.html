@@ -3,138 +3,124 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Voice AI Controller</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js" type="text/javascript"></script>
+    <title>AI Smart Home Assistant</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
     <style>
-        body { font-family: Arial; text-align: center; padding: 50px; background-color: #f4f4f9; }
-        #btn-speak { padding: 20px 40px; font-size: 24px; background: #28a745; color: white; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        #btn-speak:active { background: #218838; transform: translateY(2px); }
-        #status { margin-top: 20px; font-size: 18px; color: #555; }
-        #result { margin-top: 20px; font-size: 30px; font-weight: bold; color: #333; }
+        body { font-family: Arial; text-align: center; padding: 30px; background-color: #f4f4f9; }
+        input { padding: 10px; width: 80%; max-width: 400px; margin-bottom: 20px; border-radius: 5px; border: 1px solid #ccc; }
+        #btn-speak { padding: 20px 40px; font-size: 24px; background: #28a745; color: white; border: none; border-radius: 10px; cursor: pointer; }
+        #btn-speak:active { background: #218838; }
+        #status, #result, #ai-response { margin-top: 20px; font-size: 18px; color: #333; }
+        #ai-response { color: #0056b3; font-weight: bold; font-style: italic; }
     </style>
 </head>
 <body>
 
-    <h1>HỆ THỐNG ĐIỀU KHIỂN GIỌNG NÓI</h1>
+    <h1>TRỢ LÝ ẢO AI - SMART HOME</h1>
+    <input type="password" id="api-key" placeholder="Dán Gemini API Key vào đây...">
+    <br>
     <button id="btn-speak">🎤 BẤM ĐỂ NÓI</button>
+    
     <div id="status">MQTT: Đang kết nối...</div>
-    <div id="result">...</div>
+    <div id="result">Bạn nói: ...</div>
+    <div id="ai-response">AI trả lời: ...</div>
 
     <script>
-        // Cấu hình MQTT (Bắt buộc dùng cổng 8884 cho HTTPS)
+        // Cấu hình MQTT
         const mqtt_server = "broker.hivemq.com";
         const mqtt_port = 8884; 
-        const mqtt_topic = "hoan/voice_cmd";
+        const topic_cmd = "hoan/voice_cmd"; // Kênh gửi lệnh phần cứng
+        const topic_tts = "hoan/voice_tts"; // Kênh gửi chữ cho ESP32 đọc
         let mqtt_client;
 
         function MQTTConnect() {
             let clientID = "Web_AI_" + Math.random().toString(16).substr(2, 8);
             mqtt_client = new Paho.MQTT.Client(mqtt_server, mqtt_port, clientID);
-            
-            mqtt_client.onConnectionLost = onConnectionLost;
-            
-            let options = {
-                timeout: 3,
-                useSSL: true, // Bắt buộc True trên GitHub Pages
-                onSuccess: onConnect,
-                onFailure: onFailure
-            };
-            mqtt_client.connect(options);
+            mqtt_client.onConnectionLost = () => { setTimeout(MQTTConnect, 3000); };
+            mqtt_client.connect({ useSSL: true, onSuccess: () => { document.getElementById("status").innerHTML = "MQTT: Đã kết nối mây! ☁️"; document.getElementById("status").style.color = "green"; } });
         }
 
-        function onConnect() {
-            document.getElementById("status").innerHTML = "MQTT: Đã kết nối mây! ☁️";
-            document.getElementById("status").style.color = "green";
-        }
-
-        function onFailure(message) {
-            document.getElementById("status").innerHTML = "MQTT Lỗi: " + message.errorMessage;
-            document.getElementById("status").style.color = "red";
-            setTimeout(MQTTConnect, 5000);
-        }
-
-        function onConnectionLost(responseObject) {
-            if (responseObject.errorCode !== 0) {
-                document.getElementById("status").innerHTML = "MQTT Mất kết nối! Đang thử lại...";
-                document.getElementById("status").style.color = "orange";
-                setTimeout(MQTTConnect, 3000);
-            }
-        }
-
-        function publishMessage(msg) {
+        function publishMessage(topic, msg) {
             if (mqtt_client && mqtt_client.isConnected()) {
                 let message = new Paho.MQTT.Message(msg);
-                message.destinationName = mqtt_topic;
+                message.destinationName = topic;
                 mqtt_client.send(message);
-                console.log("Đã gửi: " + msg);
             }
         }
 
-        // Cấu hình Nhận diện giọng nói
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        const recognition = new SpeechRecognition();
-        recognition.lang = 'vi-VN';
-        recognition.interimResults = false;
-        recognition.maxAlternatives = 1;
-
-        const btnSpeak = document.getElementById("btn-speak");
-        const resultDiv = document.getElementById("result");
-        let isListening = false;
-
-        // Ép kiểm tra HTTPS
-        if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-            alert("BẢO MẬT: Bạn phải dùng link HTTPS để Micro hoạt động!");
-        }
-
-        btnSpeak.onclick = async () => {
-            if (isListening) {
-                recognition.stop();
+        // BỘ NÃO GEMINI AI
+        async function askGemini(question) {
+            const apiKey = document.getElementById("api-key").value;
+            const resDiv = document.getElementById("ai-response");
+            
+            if (!apiKey) {
+                resDiv.innerHTML = "Lỗi: Bạn chưa nhập API Key!";
+                publishMessage(topic_tts, "Vui lòng nhập chìa khóa API trên trang web");
                 return;
             }
 
-            // Mẹo trên di động: Thử lấy luồng Audio trước để ép trình duyệt hiện bảng hỏi quyền "Cho phép"
+            resDiv.innerHTML = "AI đang suy nghĩ... 🧠";
+            
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+            // Ép AI trả lời cực ngắn để ESP32 đọc không bị đứt hơi
+            const prompt = "Bạn là trợ lý ảo nhà thông minh. Hãy trả lời câu hỏi sau thật ngắn gọn dưới 25 chữ, bằng tiếng Việt bình dân: " + question;
+            
+            try {
+                let response = await fetch(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                });
+                
+                let json = await response.json();
+                let answer = json.candidates[0].content.parts[0].text;
+                
+                // Lọc bỏ các ký tự in đậm, in nghiêng (*, #) của Markdown để ESP32 đọc mượt
+                answer = answer.replace(/[*#]/g, ''); 
+                
+                resDiv.innerHTML = "AI: " + answer;
+                publishMessage(topic_tts, answer); // Bắn câu trả lời xuống ESP32 để đọc
+
+            } catch (e) {
+                resDiv.innerHTML = "Lỗi mạng hoặc API Key sai!";
+            }
+        }
+
+        // Nhận diện giọng nói
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'vi-VN';
+
+        const btnSpeak = document.getElementById("btn-speak");
+        const resultDiv = document.getElementById("result");
+
+        btnSpeak.onclick = async () => {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                // Lấy quyền xong thì tắt luồng này đi, nhường cho SpeechRecognition
                 stream.getTracks().forEach(track => track.stop());
-                
-                // Bây giờ mới khởi động nhận diện
                 recognition.start();
-                isListening = true;
                 btnSpeak.innerHTML = "🔴 ĐANG NGHE...";
                 btnSpeak.style.background = "#dc3545";
-            } catch (err) {
-                alert("Bạn chưa cấp quyền Micro cho trang web này! Hãy bấm vào ổ khóa trên thanh địa chỉ để cấp quyền.");
-                console.log("Lỗi quyền Mic: ", err);
-            }
+            } catch (err) { alert("Chưa cấp quyền Mic!"); }
         };
 
         recognition.onresult = (event) => {
-            let transcript = event.results[0][0].transcript;
+            let transcript = event.results[0][0].transcript.toLowerCase();
             resultDiv.innerHTML = "Bạn nói: " + transcript;
-            publishMessage(transcript);
-        };
 
-        recognition.onend = () => {
-            isListening = false;
-            btnSpeak.innerHTML = "🎤 BẤM ĐỂ NÓI";
-            btnSpeak.style.background = "#28a745";
-        };
-
-        recognition.onerror = (event) => {
-            if (event.error === 'not-allowed') {
-                resultDiv.innerHTML = "LỖI: Trình duyệt đang chặn Micro!";
-            } else if (event.error === 'aborted') {
-                resultDiv.innerHTML = "Lỗi: Bị ngắt (Do chạm 2 lần hoặc rớt mạng)";
+            // PHÂN LOẠI LỆNH
+            if (transcript.includes("đèn") || transcript.includes("động cơ") || transcript.includes("bơm")) {
+                // Nếu là lệnh thiết bị -> Bắn vào kênh CMD
+                document.getElementById("ai-response").innerHTML = "Phát hiện lệnh phần cứng ⚙️";
+                publishMessage(topic_cmd, transcript);
             } else {
-                resultDiv.innerHTML = "Lỗi Mic: " + event.error;
+                // Nếu là câu hỏi bình thường -> Hỏi Gemini AI
+                askGemini(transcript);
             }
-            isListening = false;
-            btnSpeak.innerHTML = "🎤 BẤM ĐỂ NÓI";
-            btnSpeak.style.background = "#28a745";
         };
 
-        // Khởi động kết nối MQTT khi load web
+        recognition.onend = () => { btnSpeak.innerHTML = "🎤 BẤM ĐỂ NÓI"; btnSpeak.style.background = "#28a745"; };
+        
         MQTTConnect();
     </script>
 </body>
