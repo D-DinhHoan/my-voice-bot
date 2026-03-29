@@ -48,9 +48,8 @@
             }
         }
 
-        // BỘ NÃO GEMINI AI (Bản nâng cấp tự dò lỗi)
+        // BỘ NÃO GEMINI AI (Bản nâng cấp có "Đồng hồ sinh học")
         async function askGemini(question) {
-            // Dùng trim() để tự động xóa khoảng trắng thừa nếu lỡ copy dính
             let apiKey = document.getElementById("api-key").value.trim(); 
             const resDiv = document.getElementById("ai-response");
             
@@ -62,8 +61,14 @@
 
             resDiv.innerHTML = "AI đang suy nghĩ... 🧠";
             
+            // 1. LẤY NGÀY GIỜ THỰC TẾ TỪ THIẾT BỊ CỦA BẠN
+            const now = new Date();
+            const todayStr = now.toLocaleString('vi-VN'); // Ví dụ: 17:15:03 29/3/2026
+            
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-            const prompt = "Bạn là trợ lý ảo nhà thông minh. Hãy trả lời thật ngắn gọn dưới 25 chữ, bằng tiếng Việt bình dân: " + question;
+            
+            // 2. "TIÊM" NGÀY GIỜ VÀO LỆNH ĐỂ AI HẾT NGÁO
+            const prompt = `Bạn là trợ lý ảo nhà thông minh. Dữ liệu thời gian thực tế hiện tại là: ${todayStr}. Hãy trả lời câu hỏi sau thật ngắn gọn dưới 25 chữ, bằng tiếng Việt bình dân: ` + question;
             
             try {
                 let response = await fetch(url, {
@@ -74,7 +79,6 @@
                 
                 let json = await response.json();
                 
-                // Nếu Google từ chối, ép nó in nguyên nhân ra màn hình
                 if (!response.ok) {
                     resDiv.innerHTML = "❌ Lỗi từ Google: " + json.error.message;
                     resDiv.style.color = "red";
@@ -89,7 +93,6 @@
                 publishMessage(topic_tts, answer); 
 
             } catch (e) {
-                // Nếu trình duyệt hoặc mạng chặn
                 resDiv.innerHTML = "❌ Lỗi kết nối: " + e.message;
                 resDiv.style.color = "red";
             }
