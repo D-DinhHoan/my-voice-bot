@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Smart Home - Secure Version</title>
+    <title>AI Smart Home - Pro Version</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
     <style>
         body { font-family: Arial; text-align: center; padding: 30px; background-color: #f4f4f9; }
@@ -17,7 +17,7 @@
 <body>
 
     <h1>TRỢ LÝ ẢO AI - SMART HOME</h1>
-    <input type="password" id="api-key" placeholder="Dán Gemini API Key vào đây (Không để khoảng trắng)...">
+    <input type="password" id="api-key" placeholder="Dán Gemini API Key vào đây...">
     <br>
     <button id="btn-speak">🎤 BẤM ĐỂ NÓI</button>
     
@@ -32,7 +32,6 @@
         const topic_tts = "hoan/voice_tts"; 
         let mqtt_client;
 
-        // THUẬT TOÁN HÀNG ĐỢI ÂM THANH
         let speechQueue = [];
         let isSpeaking = false;
 
@@ -65,18 +64,16 @@
             const resDiv = document.getElementById("ai-response");
             
             if (!apiKey) {
-                resDiv.innerHTML = "Lỗi: Bạn chưa dán API Key!";
-                resDiv.style.color = "red";
-                return;
+                resDiv.innerHTML = "Lỗi: Bạn chưa dán API Key!"; resDiv.style.color = "red"; return;
             }
 
-            resDiv.innerHTML = "AI đang suy nghĩ lướt web... 🧠🌍";
+            resDiv.innerHTML = "AI đang suy nghĩ... 🧠🌍";
             resDiv.style.color = "#856404";
             
             const now = new Date();
             const todayStr = now.toLocaleString('vi-VN'); 
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-            const prompt = `Bạn là trợ lý ảo nhà thông minh. Dữ liệu thời gian thực tế hiện tại là: ${todayStr}. Hãy trả lời câu hỏi sau thật tự nhiên, ngắn gọn dưới 40 chữ, bằng tiếng Việt: ` + question;
+            const prompt = `Bạn là trợ lý ảo nhà thông minh. Dữ liệu thời gian thực là: ${todayStr}. Trả lời câu hỏi sau thật ngắn gọn dưới 40 chữ, bằng tiếng Việt: ` + question;
             
             try {
                 let response = await fetch(url, {
@@ -93,7 +90,7 @@
                 let chunks = answer.match(/[^.?!,]+[.?!,]*/g) || [answer];
                 for(let chunk of chunks) if(chunk.trim().length > 0) speechQueue.push(chunk.trim());
                 processSpeechQueue(); 
-            } catch (e) { resDiv.innerHTML = "❌ Lỗi kết nối mạng: " + e.message; resDiv.style.color = "red"; }
+            } catch (e) { resDiv.innerHTML = "❌ Lỗi mạng: " + e.message; resDiv.style.color = "red"; }
         }
 
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -114,16 +111,26 @@
         };
 
         recognition.onresult = (event) => {
-            let transcript = event.results[0][0].transcript.toLowerCase();
+            let transcript = event.results[0][0].transcript.toLowerCase().trim();
             resultDiv.innerHTML = "Bạn nói: " + transcript;
 
-            // NÂNG CẤP TỪ KHÓA BẮT LỆNH PHẦN CỨNG
-            if (transcript.includes("đèn") || transcript.includes("động cơ") || transcript.includes("bơm") || transcript.includes("cả 3") || transcript.includes("tất cả") || transcript.includes("cả ba")) {
+            // NÂNG CẤP 1: KIỂM TRA TỪ KHÓA "GOOGLE" ĐỂ GỌI AI
+            if (transcript.startsWith("google")) {
+                let question = transcript.replace("google", "").trim();
+                if (question.length === 0) question = "Bạn có thể giúp gì cho tôi?";
+                askGemini(question);
+            } 
+            // NÂNG CẤP 2: NẾU KHÔNG CÓ "GOOGLE", KIỂM TRA LỆNH ĐIỀU KHIỂN
+            else if (transcript.includes("đèn") || transcript.includes("động cơ") || transcript.includes("bơm") || transcript.includes("cả 3") || transcript.includes("tất cả") || transcript.includes("cả ba")) {
                 document.getElementById("ai-response").innerHTML = "Đang thực thi lệnh phần cứng ⚙️";
                 document.getElementById("ai-response").style.color = "green";
                 publishMessage(topic_cmd, transcript);
-            } else {
-                askGemini(transcript);
+            } 
+            // NÂNG CẤP 3: KHÔNG CÓ "GOOGLE" VÀ CŨNG KHÔNG PHẢI LỆNH -> BÁO LỖI
+            else {
+                document.getElementById("ai-response").innerHTML = "Không rõ yêu cầu ❌";
+                document.getElementById("ai-response").style.color = "red";
+                publishMessage(topic_cmd, "khong_ro_yeu_cau"); // Gửi mã lỗi xuống mạch
             }
         };
 
