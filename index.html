@@ -79,27 +79,57 @@
 
         const btnSpeak = document.getElementById("btn-speak");
         const resultDiv = document.getElementById("result");
+        let isListening = false;
 
-        btnSpeak.onclick = () => {
-            recognition.start();
-            btnSpeak.innerHTML = "🔴 ĐANG NGHE...";
-            btnSpeak.style.background = "#dc3545";
+        // Ép kiểm tra HTTPS
+        if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+            alert("BẢO MẬT: Bạn phải dùng link HTTPS để Micro hoạt động!");
+        }
+
+        btnSpeak.onclick = async () => {
+            if (isListening) {
+                recognition.stop();
+                return;
+            }
+
+            // Mẹo trên di động: Thử lấy luồng Audio trước để ép trình duyệt hiện bảng hỏi quyền "Cho phép"
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                // Lấy quyền xong thì tắt luồng này đi, nhường cho SpeechRecognition
+                stream.getTracks().forEach(track => track.stop());
+                
+                // Bây giờ mới khởi động nhận diện
+                recognition.start();
+                isListening = true;
+                btnSpeak.innerHTML = "🔴 ĐANG NGHE...";
+                btnSpeak.style.background = "#dc3545";
+            } catch (err) {
+                alert("Bạn chưa cấp quyền Micro cho trang web này! Hãy bấm vào ổ khóa trên thanh địa chỉ để cấp quyền.");
+                console.log("Lỗi quyền Mic: ", err);
+            }
         };
 
         recognition.onresult = (event) => {
             let transcript = event.results[0][0].transcript;
             resultDiv.innerHTML = "Bạn nói: " + transcript;
-            publishMessage(transcript); // Bắn lên mây
+            publishMessage(transcript);
         };
 
-        recognition.onspeechend = () => {
-            recognition.stop();
+        recognition.onend = () => {
+            isListening = false;
             btnSpeak.innerHTML = "🎤 BẤM ĐỂ NÓI";
             btnSpeak.style.background = "#28a745";
         };
 
         recognition.onerror = (event) => {
-            resultDiv.innerHTML = "Lỗi Mic: " + event.error;
+            if (event.error === 'not-allowed') {
+                resultDiv.innerHTML = "LỖI: Trình duyệt đang chặn Micro!";
+            } else if (event.error === 'aborted') {
+                resultDiv.innerHTML = "Lỗi: Bị ngắt (Do chạm 2 lần hoặc rớt mạng)";
+            } else {
+                resultDiv.innerHTML = "Lỗi Mic: " + event.error;
+            }
+            isListening = false;
             btnSpeak.innerHTML = "🎤 BẤM ĐỂ NÓI";
             btnSpeak.style.background = "#28a745";
         };
