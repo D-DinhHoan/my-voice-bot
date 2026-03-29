@@ -48,9 +48,10 @@
             }
         }
 
-        // BỘ NÃO GEMINI AI
+        // BỘ NÃO GEMINI AI (Bản nâng cấp tự dò lỗi)
         async function askGemini(question) {
-            const apiKey = document.getElementById("api-key").value;
+            // Dùng trim() để tự động xóa khoảng trắng thừa nếu lỡ copy dính
+            let apiKey = document.getElementById("api-key").value.trim(); 
             const resDiv = document.getElementById("ai-response");
             
             if (!apiKey) {
@@ -62,8 +63,7 @@
             resDiv.innerHTML = "AI đang suy nghĩ... 🧠";
             
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-            // Ép AI trả lời cực ngắn để ESP32 đọc không bị đứt hơi
-            const prompt = "Bạn là trợ lý ảo nhà thông minh. Hãy trả lời câu hỏi sau thật ngắn gọn dưới 25 chữ, bằng tiếng Việt bình dân: " + question;
+            const prompt = "Bạn là trợ lý ảo nhà thông minh. Hãy trả lời thật ngắn gọn dưới 25 chữ, bằng tiếng Việt bình dân: " + question;
             
             try {
                 let response = await fetch(url, {
@@ -73,16 +73,25 @@
                 });
                 
                 let json = await response.json();
-                let answer = json.candidates[0].content.parts[0].text;
                 
-                // Lọc bỏ các ký tự in đậm, in nghiêng (*, #) của Markdown để ESP32 đọc mượt
+                // Nếu Google từ chối, ép nó in nguyên nhân ra màn hình
+                if (!response.ok) {
+                    resDiv.innerHTML = "❌ Lỗi từ Google: " + json.error.message;
+                    resDiv.style.color = "red";
+                    return;
+                }
+                
+                let answer = json.candidates[0].content.parts[0].text;
                 answer = answer.replace(/[*#]/g, ''); 
                 
                 resDiv.innerHTML = "AI: " + answer;
-                publishMessage(topic_tts, answer); // Bắn câu trả lời xuống ESP32 để đọc
+                resDiv.style.color = "#0056b3";
+                publishMessage(topic_tts, answer); 
 
             } catch (e) {
-                resDiv.innerHTML = "Lỗi mạng hoặc API Key sai!";
+                // Nếu trình duyệt hoặc mạng chặn
+                resDiv.innerHTML = "❌ Lỗi kết nối: " + e.message;
+                resDiv.style.color = "red";
             }
         }
 
