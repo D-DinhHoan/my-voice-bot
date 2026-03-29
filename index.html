@@ -7,8 +7,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
     <style>
         body { font-family: Arial; text-align: center; padding: 30px; background-color: #f4f4f9; }
-        input { padding: 12px; width: 80%; max-width: 450px; margin-bottom: 20px; border-radius: 8px; border: 1px solid #ccc; font-size: 16px;}
-        #btn-speak { padding: 20px 40px; font-size: 24px; background: #28a745; color: white; border: none; border-radius: 10px; cursor: pointer; transition: 0.3s; box-shadow: 0 4px 6px rgba(0,0,0,0.1);}
+        /* Đã xóa CSS của thẻ input vì không còn dùng nữa */
+        #btn-speak { padding: 20px 40px; font-size: 24px; background: #28a745; color: white; border: none; border-radius: 10px; cursor: pointer; transition: 0.3s; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-top: 30px;}
         #btn-speak:active { background: #218838; transform: translateY(2px);}
         #status, #result, #ai-response { margin-top: 20px; font-size: 18px; color: #333; }
         #ai-response { color: #0056b3; font-weight: bold; font-style: italic; max-width: 600px; margin: 20px auto; line-height: 1.5;}
@@ -17,8 +17,6 @@
 <body>
 
     <h1>TRỢ LÝ ẢO AI - SMART HOME</h1>
-    <input type="password" id="api-key" placeholder="Dán Gemini API Key vào đây (Không để khoảng trắng)...">
-    <br>
     <button id="btn-speak">🎤 BẤM ĐỂ NÓI</button>
     
     <div id="status">MQTT: Đang kết nối...</div>
@@ -26,6 +24,9 @@
     <div id="ai-response">AI: ...</div>
 
     <script>
+        // BỘ NÃO ĐÃ ĐƯỢC MỞ KHÓA SẴN BẰNG API KEY CỦA BẠN
+        const MY_GEMINI_KEY = "AIzaSyAUzEEDzf0OeGemx9XKgwruSzoJowf3Jhc"; 
+
         const mqtt_server = "broker.hivemq.com";
         const mqtt_port = 8884; 
         const topic_cmd = "hoan/voice_cmd"; 
@@ -75,23 +76,15 @@
         }
 
         async function askGemini(question) {
-            let apiKey = document.getElementById("api-key").value.trim(); 
             const resDiv = document.getElementById("ai-response");
-            
-            if (!apiKey) {
-                resDiv.innerHTML = "Lỗi: Bạn chưa nhập API Key!";
-                resDiv.style.color = "red";
-                return;
-            }
-
             resDiv.innerHTML = "AI đang suy nghĩ lướt web... 🧠🌍";
             resDiv.style.color = "#856404";
             
             const now = new Date();
             const todayStr = now.toLocaleString('vi-VN'); 
             
-            // DÙNG BẢN 2.5 FLASH MỚI NHẤT
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+            // DÙNG BẢN 2.5 FLASH VÀ GẮN SẴN KEY
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${MY_GEMINI_KEY}`;
             const prompt = `Bạn là trợ lý ảo nhà thông minh. Dữ liệu thời gian thực tế hiện tại là: ${todayStr}. Hãy trả lời câu hỏi sau thật tự nhiên, ngắn gọn dưới 40 chữ, bằng tiếng Việt: ` + question;
             
             try {
@@ -125,7 +118,7 @@
                         speechQueue.push(chunk.trim());
                     }
                 }
-                processSpeechQueue(); // Kích hoạt máy đọc
+                processSpeechQueue(); 
 
             } catch (e) {
                 resDiv.innerHTML = "❌ Lỗi kết nối mạng: " + e.message;
