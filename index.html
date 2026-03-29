@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Smart Home - Bản Hoàn Chỉnh</title>
+    <title>AI Smart Home - Secure Version</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
     <style>
         body { font-family: Arial; text-align: center; padding: 30px; background-color: #f4f4f9; }
-        /* Đã xóa CSS của thẻ input vì không còn dùng nữa */
-        #btn-speak { padding: 20px 40px; font-size: 24px; background: #28a745; color: white; border: none; border-radius: 10px; cursor: pointer; transition: 0.3s; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-top: 30px;}
+        input { padding: 12px; width: 80%; max-width: 450px; margin-bottom: 20px; border-radius: 8px; border: 1px solid #ccc; font-size: 16px;}
+        #btn-speak { padding: 20px 40px; font-size: 24px; background: #28a745; color: white; border: none; border-radius: 10px; cursor: pointer; transition: 0.3s; box-shadow: 0 4px 6px rgba(0,0,0,0.1);}
         #btn-speak:active { background: #218838; transform: translateY(2px);}
         #status, #result, #ai-response { margin-top: 20px; font-size: 18px; color: #333; }
         #ai-response { color: #0056b3; font-weight: bold; font-style: italic; max-width: 600px; margin: 20px auto; line-height: 1.5;}
@@ -17,6 +17,8 @@
 <body>
 
     <h1>TRỢ LÝ ẢO AI - SMART HOME</h1>
+    <input type="password" id="api-key" placeholder="Dán Gemini API Key vào đây (Không để khoảng trắng)...">
+    <br>
     <button id="btn-speak">🎤 BẤM ĐỂ NÓI</button>
     
     <div id="status">MQTT: Đang kết nối...</div>
@@ -24,47 +26,30 @@
     <div id="ai-response">AI: ...</div>
 
     <script>
-        // BỘ NÃO ĐÃ ĐƯỢC MỞ KHÓA SẴN BẰNG API KEY CỦA BẠN
-        const MY_GEMINI_KEY = "AIzaSyAUzEEDzf0OeGemx9XKgwruSzoJowf3Jhc"; 
-
         const mqtt_server = "broker.hivemq.com";
         const mqtt_port = 8884; 
         const topic_cmd = "hoan/voice_cmd"; 
         const topic_tts = "hoan/voice_tts"; 
         let mqtt_client;
 
-        // THUẬT TOÁN HÀNG ĐỢI ÂM THANH (Chống nghẽn ESP32)
+        // THUẬT TOÁN HÀNG ĐỢI ÂM THANH
         let speechQueue = [];
         let isSpeaking = false;
 
         function processSpeechQueue() {
             if (isSpeaking || speechQueue.length === 0) return;
             isSpeaking = true;
-            
             let textChunk = speechQueue.shift();
             publishMessage(topic_tts, textChunk);
-            
-            // Tính toán thời gian đợi ESP32 đọc xong (Khoảng 350ms cho mỗi chữ + 1 giây nghỉ)
-            let wordCount = textChunk.split(" ").length;
-            let delayTime = (wordCount * 350) + 1000; 
-
-            setTimeout(() => {
-                isSpeaking = false;
-                processSpeechQueue(); // Gọi đọc câu tiếp theo
-            }, delayTime);
+            let delayTime = (textChunk.split(" ").length * 350) + 1000; 
+            setTimeout(() => { isSpeaking = false; processSpeechQueue(); }, delayTime);
         }
 
         function MQTTConnect() {
             let clientID = "Web_AI_" + Math.random().toString(16).substr(2, 8);
             mqtt_client = new Paho.MQTT.Client(mqtt_server, mqtt_port, clientID);
             mqtt_client.onConnectionLost = () => { setTimeout(MQTTConnect, 3000); };
-            mqtt_client.connect({ 
-                useSSL: true, 
-                onSuccess: () => { 
-                    document.getElementById("status").innerHTML = "MQTT: Đã kết nối mây! ☁️"; 
-                    document.getElementById("status").style.color = "green"; 
-                } 
-            });
+            mqtt_client.connect({ useSSL: true, onSuccess: () => { document.getElementById("status").innerHTML = "MQTT: Đã kết nối mây! ☁️"; document.getElementById("status").style.color = "green"; } });
         }
 
         function publishMessage(topic, msg) {
@@ -76,54 +61,39 @@
         }
 
         async function askGemini(question) {
+            let apiKey = document.getElementById("api-key").value.trim(); 
             const resDiv = document.getElementById("ai-response");
+            
+            if (!apiKey) {
+                resDiv.innerHTML = "Lỗi: Bạn chưa dán API Key!";
+                resDiv.style.color = "red";
+                return;
+            }
+
             resDiv.innerHTML = "AI đang suy nghĩ lướt web... 🧠🌍";
             resDiv.style.color = "#856404";
             
             const now = new Date();
             const todayStr = now.toLocaleString('vi-VN'); 
-            
-            // DÙNG BẢN 2.5 FLASH VÀ GẮN SẴN KEY
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${MY_GEMINI_KEY}`;
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
             const prompt = `Bạn là trợ lý ảo nhà thông minh. Dữ liệu thời gian thực tế hiện tại là: ${todayStr}. Hãy trả lời câu hỏi sau thật tự nhiên, ngắn gọn dưới 40 chữ, bằng tiếng Việt: ` + question;
             
             try {
                 let response = await fetch(url, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ 
-                        contents: [{ parts: [{ text: prompt }] }],
-                        tools: [{ googleSearch: {} }] // BẬT QUYỀN LƯỚT WEB
-                    })
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], tools: [{ googleSearch: {} }] })
                 });
-                
                 let json = await response.json();
+                if (!response.ok) { resDiv.innerHTML = "❌ Lỗi: " + json.error.message; resDiv.style.color = "red"; return; }
                 
-                if (!response.ok) {
-                    resDiv.innerHTML = "❌ Lỗi từ Google: " + json.error.message;
-                    resDiv.style.color = "red";
-                    return;
-                }
+                let answer = json.candidates[0].content.parts[0].text.replace(/[*#]/g, ''); 
+                resDiv.innerHTML = "AI: " + answer; resDiv.style.color = "#0056b3";
                 
-                let answer = json.candidates[0].content.parts[0].text;
-                answer = answer.replace(/[*#]/g, ''); // Lọc ký tự thừa
-                
-                resDiv.innerHTML = "AI: " + answer;
-                resDiv.style.color = "#0056b3";
-                
-                // BĂM NHỎ CÂU TRẢ LỜI THEO DẤU CHẤM/PHẨY ĐỂ ĐƯA VÀO HÀNG ĐỢI
                 let chunks = answer.match(/[^.?!,]+[.?!,]*/g) || [answer];
-                for(let chunk of chunks) {
-                    if(chunk.trim().length > 0) {
-                        speechQueue.push(chunk.trim());
-                    }
-                }
+                for(let chunk of chunks) if(chunk.trim().length > 0) speechQueue.push(chunk.trim());
                 processSpeechQueue(); 
-
-            } catch (e) {
-                resDiv.innerHTML = "❌ Lỗi kết nối mạng: " + e.message;
-                resDiv.style.color = "red";
-            }
+            } catch (e) { resDiv.innerHTML = "❌ Lỗi kết nối mạng: " + e.message; resDiv.style.color = "red"; }
         }
 
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -140,14 +110,15 @@
                 recognition.start();
                 btnSpeak.innerHTML = "🔴 ĐANG NGHE...";
                 btnSpeak.style.background = "#dc3545";
-            } catch (err) { alert("Chưa cấp quyền Mic cho trình duyệt!"); }
+            } catch (err) { alert("Chưa cấp quyền Mic!"); }
         };
 
         recognition.onresult = (event) => {
             let transcript = event.results[0][0].transcript.toLowerCase();
             resultDiv.innerHTML = "Bạn nói: " + transcript;
 
-            if (transcript.includes("đèn") || transcript.includes("động cơ") || transcript.includes("bơm")) {
+            // NÂNG CẤP TỪ KHÓA BẮT LỆNH PHẦN CỨNG
+            if (transcript.includes("đèn") || transcript.includes("động cơ") || transcript.includes("bơm") || transcript.includes("cả 3") || transcript.includes("tất cả") || transcript.includes("cả ba")) {
                 document.getElementById("ai-response").innerHTML = "Đang thực thi lệnh phần cứng ⚙️";
                 document.getElementById("ai-response").style.color = "green";
                 publishMessage(topic_cmd, transcript);
